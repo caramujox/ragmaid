@@ -1,93 +1,124 @@
-# Fonte de dados — RO Latam Trading Search
+<p align="center">
+  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+</p>
 
-Este documento registra de onde vêm os dados consumidos pelo módulo `market-search`, o formato bruto capturado, e como ele foi mapeado para a entidade de domínio `TradingItem`. Serve como referência para quando o site mudar e o parser precisar ser ajustado.
+[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
+[circleci-url]: https://circleci.com/gh/nestjs/nest
 
-## Origem
+  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
+    <p align="center">
+<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
+<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
+<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
+<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
+<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
+<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
+<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
+  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
+    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
+  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
+</p>
+  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
+  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-- **Site:** RO Latam (GnJoy Americas)
-- **URL de busca:** `https://ro.gnjoyamericas.com/pt/intro/shop-search/trading?storeType=BUY&serverType=FREYA&searchWord=<termo>&sortType=LOW_PRICE`
-- **Natureza do dado:** não é uma API REST documentada. O site é uma aplicação Next.js (App Router) renderizada no servidor; os resultados da busca vêm embutidos no próprio HTML da página, dentro de um `<script>self.__next_f.push([1,"..."])</script>`, como parte do payload de RSC (React Server Components) do framework.
-- **Proteção:** o domínio está atrás de Cloudflare. Chamadas HTTP simples (curl, Insomnia, axios) tomam `403`, mesmo replicando os headers de um navegador real — o bloqueio acontece por fingerprint de conexão (TLS/HTTP2), não por header ausente. Por isso o `market-search` acessa a página via Chromium headless (Playwright) em vez de uma chamada HTTP direta.
-- **Data da captura de referência:** HAR capturado em 16/09/2026, buscando o termo `Arcebispo` no servidor `FREYA`.
+## Description
 
-## JSON bruto capturado (antes de qualquer mapeamento)
+[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
-Trecho relevante, já desescapado, extraído do payload RSC embutido no HTML da página (`"list":[...]`):
+## Project setup
 
-```json
-{
-  "queryParams": {
-    "storeType": "BUY",
-    "serverType": "FREYA",
-    "searchWord": "Arcebispo",
-    "sortType": "LOW_PRICE"
-  },
-  "list": [
-    {
-      "svrId": 3,
-      "itemId": 2866,
-      "mapId": 835,
-      "ssi": "7686228685002935677",
-      "itemName": "Anel do Arcebispo",
-      "databaseImgPath": "https://assets.gnjoyamericas.com/static/upload/database/item/2025/10/2866.png",
-      "databaseType": "armor",
-      "storeName": "          ",
-      "itemPrice": 1400000,
-      "itemCnt": 1,
-      "slotMaxCount": "",
-      "storeTypeName": "BUY",
-      "itemSellerCharName": "Manná"
-    },
-    {
-      "svrId": 3,
-      "itemId": 2866,
-      "mapId": 835,
-      "ssi": "7686252680985236652",
-      "itemName": "Anel do Arcebispo",
-      "databaseImgPath": "https://assets.gnjoyamericas.com/static/upload/database/item/2025/10/2866.png",
-      "databaseType": "armor",
-      "storeName": "18 toma essa denuncia ai Bannnnn",
-      "itemPrice": 1500000,
-      "itemCnt": 1,
-      "slotMaxCount": "",
-      "storeTypeName": "BUY",
-      "itemSellerCharName": "<Tops>"
-    }
-  ]
-}
+```bash
+$ npm install
 ```
 
-> Amostra reduzida a 2 itens por brevidade — a lista real retorna todos os resultados da busca, um objeto por anúncio de loja.
+## Compile and run the project
 
-## Mapeamento: campo bruto → `TradingItem`
+```bash
+# development
+$ npm run start
 
-| Campo bruto          | Tipo         | Descrição                                                             | Está no `TradingItem`? | Motivo                                                                              |
-| -------------------- | ------------ | --------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------- |
-| `svrId`              | number       | Id numérico do servidor (3 = Freya, nesse exemplo)                    | ✅ sim                 | usado como parte da chave de cache                                                  |
-| `itemId`             | number       | Id do item no banco de dados do jogo                                  | ✅ sim                 | identifica o item de forma inequívoca (nomes podem repetir)                         |
-| `mapId`              | number       | Id do mapa onde a loja está posicionada                               | ❌ não                 | nenhum consumidor atual precisa de localização no mapa                              |
-| `ssi`                | string       | Identificador interno da entrada de venda (session/store id)          | ❌ não                 | uso interno do site, sem valor pro bot hoje                                         |
-| `itemName`           | string       | Nome do item, no idioma da busca (pt)                                 | ✅ sim                 | exibido diretamente no embed do Discord                                             |
-| `databaseImgPath`    | string (URL) | Ícone do item                                                         | ❌ não                 | bot atual responde só texto; candidato a incluir se um dia o embed ganhar thumbnail |
-| `databaseType`       | string       | Categoria do item (`armor`, `weapon`, etc.)                           | ❌ não                 | não usado em nenhuma regra de negócio hoje                                          |
-| `storeName`          | string       | Nome da loja do vendedor (pode vir em branco ou com texto livre/spam) | ✅ sim                 | exibido no embed                                                                    |
-| `itemPrice`          | number       | Preço unitário em Zeny                                                | ✅ sim                 | é o dado principal da busca                                                         |
-| `itemCnt`            | number       | Quantidade por lote/anúncio                                           | ✅ sim                 | exibido no embed (`x{itemCnt}`)                                                     |
-| `slotMaxCount`       | string       | Slots do equipamento (geralmente vazio nos exemplos capturados)       | ❌ não                 | sem uso definido ainda                                                              |
-| `storeTypeName`      | string       | Redundante com o `storeType` já enviado na busca (`BUY`/`SELL`)       | ❌ não                 | seria repetição do parâmetro de busca                                               |
-| `itemSellerCharName` | string       | Nome do personagem vendedor                                           | ✅ sim                 | exibido no embed                                                                    |
+# watch mode
+$ npm run start:dev
 
-Campos não incluídos hoje ficam de fora do construtor por decisão de design (ver discussão na Etapa 2 do tutorial) — não por limitação técnica. Adicionar qualquer um deles ao `TradingItem` é só estender o construtor e o `RawTradingItem` do parser.
+# production mode
+$ npm run start:prod
+```
 
-## Observações sobre qualidade do dado
+## Run tests
 
-- `storeName` e `itemSellerCharName` são texto livre digitado por jogadores — já foram observados valores com spam, símbolos e nomes de loja em branco (só espaços). Não assuma que são identificadores limpos.
-- `itemPrice` vem como número inteiro (Zeny), sem separador de milhar.
-- A ordenação (`sortType=LOW_PRICE`) é feita pelo próprio site antes de retornar a lista — o parser não reordena nada.
+```bash
+# unit tests
+$ npm run test
 
-## Como recapturar uma amostra nova (quando o site mudar)
+# e2e tests
+$ npm run test:e2e
 
-1. Abra a busca no navegador normalmente (ex: `.../trading?storeType=BUY&serverType=FREYA&searchWord=Arcebispo&sortType=LOW_PRICE`).
-2. DevTools → aba Network → **Preserve log** → refaça a busca → botão direito numa requisição → **Save all as HAR with content**.
-3. No HAR, procure a resposta HTML da própria URL de busca (não os `_rsc=` prefetch, que vêm vazios) e localize o texto `\"list\":[` dentro dela.
-4. Compare a estrutura nova com a tabela acima e ajuste `RawTradingItem` (`price-search/infrastructure/parsers/market-html-parser.ts`) e a entidade `TradingItem` conforme necessário.
+# test coverage
+$ npm run test:cov
+```
+
+## Deployment
+
+When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+
+If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+
+```bash
+$ npm install -g @nestjs/mau
+$ mau deploy
+```
+
+With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+
+## Observability
+
+In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+
+[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+
+- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
+- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
+- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
+- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
+- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
+- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
+- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
+- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+
+To add it to this project:
+
+```bash
+$ npm install @nestjs/observe
+```
+
+Then follow the [setup guide](https://docs.nestjs.com/observability/overview) - it takes a single import and an app key.
+
+The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
+
+## Resources
+
+Check out a few resources that may come in handy when working with NestJS:
+
+- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
+- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
+- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
+- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
+- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
+- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
+- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
+- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
+- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+
+## Support
+
+Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+
+## Stay in touch
+
+- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
+- Website - [https://nestjs.com](https://nestjs.com/)
+- Twitter - [@nestframework](https://twitter.com/nestframework)
+
+## License
+
+Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
